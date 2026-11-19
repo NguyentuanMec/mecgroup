@@ -7,12 +7,15 @@
  * - Chuyển tiền giữa các ví (rút ATM, gửi tiết kiệm) KHÔNG phải chi.
  * - Không dùng AI. Dán TRỌN FILE này vào Apps Script gắn với Google Sheet.
  * - Chỉ có DUY NHẤT 1 hàm doPost trong dự án (đừng thêm file khác).
+ * BOT_TOKEN và PIN lưu ở Script Properties (menu MEC Group), KHÔNG nằm trong code.
  * Cài đặt / nâng cấp: xem HUONG_DAN.md
  *****************************************************************/
 
 const CONFIG = {
-  BOT_TOKEN: 'DAN_TOKEN_BOT_VAO_DAY',   // token từ @BotFather
-  PIN: 'DOI_MAT_KHAU_NAY',              // mật khẩu để đăng ký chat: /dangky <PIN>
+  // BOT_TOKEN và PIN KHÔNG để trong code. Cài bằng menu "MEC Group" trong Google Sheet
+  // (lưu ở Script Properties). Hai dòng dưới chỉ là phương án dự phòng, để trống.
+  BOT_TOKEN: '',
+  PIN: '',
   WEBAPP_URL: '',                       // để trống = tự lấy sau khi Deploy
   TZ: 'Asia/Ho_Chi_Minh',
   GIO_BAO_CAO: 20,                      // báo cáo ngày tự động lúc 20:30
@@ -663,6 +666,8 @@ function doisoat_(cfg) {
  *  5. TELEGRAM
  * ============================================================= */
 function props_() { return PropertiesService.getScriptProperties(); }
+function botToken_() { return String(props_().getProperty('BOT_TOKEN') || CONFIG.BOT_TOKEN || '').trim(); }
+function pin_() { return String(props_().getProperty('PIN') || CONFIG.PIN || '').trim(); }
 function getSecret_() {
   let s = props_().getProperty('SECRET');
   if (!s) { s = Utilities.getUuid().replace(/-/g, ''); props_().setProperty('SECRET', s); }
@@ -679,7 +684,9 @@ function send_(chatId, html) {
   });
   if (cur) parts.push(cur);
   parts.forEach(p => {
-    const url = 'https://api.telegram.org/bot' + CONFIG.BOT_TOKEN + '/sendMessage';
+    const token = botToken_();
+    if (!token) throw new Error('Chưa cài BOT_TOKEN: menu MEC Group > Cài đặt BOT_TOKEN.');
+    const url = 'https://api.telegram.org/bot' + token + '/sendMessage';
     const r = UrlFetchApp.fetch(url, { method: 'post', contentType: 'application/json', muteHttpExceptions: true, payload: JSON.stringify({ chat_id: chatId, text: p, parse_mode: 'HTML', disable_web_page_preview: true }) });
     if (r.getResponseCode() !== 200) {
       UrlFetchApp.fetch(url, { method: 'post', contentType: 'application/json', muteHttpExceptions: true, payload: JSON.stringify({ chat_id: chatId, text: p.replace(/<[^>]+>/g, '') }) });
@@ -736,8 +743,8 @@ function handleUpdate_(upd) {
 
   const reg = text.match(/^\/dangky\s+(\S+)/i);
   if (reg) {
-    if (CONFIG.PIN === 'DOI_MAT_KHAU_NAY') { send_(chatId, '⚠️ Chưa đổi CONFIG.PIN trong code. Hãy đặt mật khẩu rồi lưu lại.'); return; }
-    if (reg[1] !== CONFIG.PIN) { send_(chatId, '❌ Sai mật khẩu.'); return; }
+    if (!pin_()) { send_(chatId, '⚠️ Chưa đặt PIN. Trong Google Sheet: menu MEC Group > Cài đặt PIN.'); return; }
+    if (reg[1] !== pin_()) { send_(chatId, '❌ Sai mật khẩu.'); return; }
     const chats = getChats_();
     if (chats.indexOf(chatId) < 0) { chats.push(chatId); props_().setProperty('CHATS', JSON.stringify(chats)); }
     send_(chatId, '✅ Đã đăng ký chat này nhận báo cáo.\n\n' + HELP_);
@@ -915,11 +922,43 @@ function baoCaoTuDong() {
  * ============================================================= */
 function onOpen() {
   SpreadsheetApp.getUi().createMenu('MEC Group')
+    .addItem('1. Cài đặt BOT_TOKEN', 'caiDatToken')
+    .addItem('2. Cài đặt PIN (mật khẩu đăng ký chat)', 'caiDatPin')
+    .addItem('3. Nối bot với Sheet (sau khi Deploy Web app)', 'thietLapWebhook')
+    .addSeparator()
     .addItem('Làm mới cấu hình & bảng báo cáo', 'lamMoi')
     .addItem('Gán ví mặc định cho dòng cũ chưa có ví', 'ganViMacDinh')
     .addItem('Gửi báo cáo hôm nay lên Telegram', 'baoCaoTuDong')
     .addItem('Đối soát số liệu', 'menuDoiSoat')
     .addToUi();
+}
+
+/** Menu: cài BOT_TOKEN vào Script Properties (không nằm trong code). */
+function caiDatToken() {
+  const ui = SpreadsheetApp.getUi();
+  const r = ui.prompt('Cài đặt BOT_TOKEN', 'Dán token lấy từ @BotFather. Token được lưu ở Script Properties, không nằm trong code.', ui.ButtonSet.OK_CANCEL);
+  if (r.getSelectedButton() !== ui.Button.OK) return;
+  const t = r.getResponseText().trim();
+  if (!/^\d{5,}:[A-Za-z0-9_-]{30,}$/.test(t)) { ui.alert('Token sai định dạng (phải dạng 123456789:AAH...). Chưa lưu.'); return; }
+  let info = '';
+  try {
+    const res = JSON.parse(UrlFetchApp.fetch('https://api.telegram.org/bot' + t + '/getMe', { muteHttpExceptions: true }).getContentText());
+    if (!res.ok) { ui.alert('Telegram từ chối token này (' + (res.description || 'không rõ lý do') + '). Chưa lưu.'); return; }
+    info = ' Bot: @' + res.result.username + '.';
+  } catch (e) { ui.alert('Không kiểm tra được token với Telegram: ' + e.message + '. Chưa lưu.'); return; }
+  props_().setProperty('BOT_TOKEN', t);
+  ui.alert('Đã lưu BOT_TOKEN.' + info);
+}
+
+/** Menu: cài PIN (mật khẩu để /dangky) vào Script Properties. */
+function caiDatPin() {
+  const ui = SpreadsheetApp.getUi();
+  const r = ui.prompt('Cài đặt PIN', 'Đặt mật khẩu (tối thiểu 6 ký tự, không có dấu cách). Dùng để gõ /dangky MẬT_KHẨU trên Telegram.', ui.ButtonSet.OK_CANCEL);
+  if (r.getSelectedButton() !== ui.Button.OK) return;
+  const v = r.getResponseText().trim();
+  if (v.length < 6 || /\s/.test(v)) { ui.alert('PIN tối thiểu 6 ký tự và không có dấu cách. Chưa lưu.'); return; }
+  props_().setProperty('PIN', v);
+  ui.alert('Đã lưu PIN.');
 }
 
 function menuDoiSoat() {
@@ -1060,20 +1099,25 @@ function setup() {
   lamMoi();
   taoLich_();
   getSecret_();
-  Logger.log('XONG. Việc tiếp theo: (1) nhập SỐ DƯ ĐẦU KỲ ở tab CauHinh cột X, rồi menu MEC Group > Làm mới; (2) nếu cài mới: Deploy Web app rồi chạy thietLapWebhook(); nếu nâng cấp: Triển khai > Quản lý triển khai > Phiên bản mới.');
+  Logger.log('XONG. Việc tiếp theo: (0) menu MEC Group > Cài đặt BOT_TOKEN và Cài đặt PIN; (1) nhập SỐ DƯ ĐẦU KỲ ở tab CauHinh cột X, rồi menu MEC Group > Làm mới; (2) nếu cài mới: Deploy Web app rồi menu MEC Group > Nối bot với Sheet; nếu nâng cấp: Triển khai > Quản lý triển khai > Phiên bản mới.');
 }
 
 /** BƯỚC 2 (chỉ khi cài mới): chạy sau khi Deploy Web app. */
 function thietLapWebhook() {
   const base = CONFIG.WEBAPP_URL || ScriptApp.getService().getUrl();
   if (!base || /\/dev$/.test(base)) throw new Error('Chưa có URL Web app (/exec). Hãy Deploy > New deployment > Web app trước, hoặc dán URL vào CONFIG.WEBAPP_URL.');
+  if (!botToken_()) throw new Error('Chưa cài BOT_TOKEN: menu MEC Group > Cài đặt BOT_TOKEN.');
   const url = base + '?k=' + encodeURIComponent(getSecret_());
-  const r = UrlFetchApp.fetch('https://api.telegram.org/bot' + CONFIG.BOT_TOKEN + '/setWebhook', { method: 'post', muteHttpExceptions: true, payload: { url: url, drop_pending_updates: 'true', allowed_updates: JSON.stringify(['message']) } });
+  const r = UrlFetchApp.fetch('https://api.telegram.org/bot' + botToken_() + '/setWebhook', { method: 'post', muteHttpExceptions: true, payload: { url: url, drop_pending_updates: 'true', allowed_updates: JSON.stringify(['message']) } });
   Logger.log(r.getContentText());
+  try {
+    const ok = JSON.parse(r.getContentText()).ok === true;
+    SpreadsheetApp.getUi().alert(ok ? 'Đã nối bot với Sheet. Mở bot trên Telegram và gõ /dangky MẬT_KHẨU.' : 'Telegram báo lỗi: ' + r.getContentText());
+  } catch (e) { }
 }
 
 function xemTrangThaiWebhook() {
-  Logger.log(UrlFetchApp.fetch('https://api.telegram.org/bot' + CONFIG.BOT_TOKEN + '/getWebhookInfo', { muteHttpExceptions: true }).getContentText());
+  Logger.log(UrlFetchApp.fetch('https://api.telegram.org/bot' + botToken_() + '/getWebhookInfo', { muteHttpExceptions: true }).getContentText());
 }
 
 /* =============================================================

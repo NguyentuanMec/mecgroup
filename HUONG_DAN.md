@@ -17,9 +17,10 @@ Chạy hoàn toàn bằng Google Apps Script: không dùng AI, không tốn phí
 
 ## A. Nâng cấp từ bản 1 (đã cài bản 1)
 
-1. Mở Apps Script, **xóa hết code cũ và dán toàn bộ `Code.gs` mới**. Điền lại `BOT_TOKEN` và `PIN` giống bản 1. Lưu.
+1. Mở Apps Script, **xóa hết code cũ và dán toàn bộ `Code.gs` mới**. Lưu. **Không cần điền token vào code nữa**: token và PIN giờ cài bằng menu trong Sheet (bước 3b).
 2. Chạy hàm **`kiemTra`**: phải thấy các dòng `ok`, không có `FAIL`.
 3. Chạy hàm **`setup`**. Lần này nó **nạp lại tab `CauHinh` theo bản 2** (nếu Anh đã tự sửa `CauHinh` ở bản 1, hãy ghi lại trước), thêm cột Ví vào `SoCai` và khối "Số dư các ví" vào `BaoCao`.
+3b. Trong Sheet, menu **MEC Group → 1. Cài đặt BOT_TOKEN** (dán token, bot sẽ kiểm tra và hiện tên bot) rồi **2. Cài đặt PIN**. Token và PIN lưu ở Script Properties, không nằm trong code. (Nếu bản 1 Anh đã điền token trong code thì làm bước này, code mới không đọc token trong code nữa.)
 4. Vào tab **`CauHinh`**, ô vàng cột **X ("Số dư đầu kỳ")**: nhập **số dư thật hiện tại** của Tiền mặt, Ngân hàng, Tiết kiệm. Chọn menu **MEC Group → Làm mới cấu hình & bảng báo cáo**.
    Bước này bắt buộc làm trước khi ghi giao dịch, nếu không bot sẽ coi số dư đầu là 0.
 5. Nếu bản 1 đã ghi dòng thật trong `SoCai`: chọn menu **MEC Group → Gán ví mặc định cho dòng cũ chưa có ví** (dòng thử nên hủy bằng `/undo` hoặc đổi Loại thành `HUY`).
@@ -28,10 +29,11 @@ Chạy hoàn toàn bằng Google Apps Script: không dùng AI, không tốn phí
 
 ## B. Cài mới (chưa cài bản 1)
 
-1. @BotFather → `/newbot` → copy token. Tạo Google Sheet mới → **Tiện ích mở rộng → Apps Script** → dán `Code.gs`, điền `BOT_TOKEN`, `PIN`.
-2. Chạy `kiemTra` (phải toàn `ok`), rồi chạy `setup` (cấp quyền).
+1. @BotFather → `/newbot` → copy token. Tạo Google Sheet mới → **Tiện ích mở rộng → Apps Script** → dán `Code.gs` (không sửa gì trong code).
+2. Chạy `kiemTra` (phải toàn `ok`), rồi chạy `setup` (cấp quyền). Tải lại trang Sheet, menu **MEC Group** sẽ xuất hiện.
+2b. Menu **MEC Group → 1. Cài đặt BOT_TOKEN** (dán token từ @BotFather) và **2. Cài đặt PIN** (mật khẩu tự đặt, tối thiểu 6 ký tự).
 3. Nhập **số dư đầu kỳ** ở tab `CauHinh` cột X (ô vàng) → menu **MEC Group → Làm mới**.
-4. **Triển khai → Tùy chọn triển khai mới → Ứng dụng web** (Thực thi: Tôi; Truy cập: Bất kỳ ai) → chạy `thietLapWebhook` (phải có `"ok":true`).
+4. **Triển khai → Tùy chọn triển khai mới → Ứng dụng web** (Thực thi: Tôi; Truy cập: Bất kỳ ai) → menu **MEC Group → 3. Nối bot với Sheet** (hiện thông báo "Đã nối bot").
 5. Trên Telegram mở bot → `/dangky MẬT_KHẨU`.
 
 ## C. Chạy thử đầu cuối (bắt buộc làm, vì phần Telegram và Sheet chưa ai chạy thật)
@@ -90,7 +92,8 @@ Sửa tab `CauHinh` (không đặt trùng bí danh giữa Dự án, Kênh, Ví v
 
 ## G. Sự cố thường gặp
 
-- **Bot im lặng**: chạy `xemTrangThaiWebhook`. Nếu `url` trống thì chạy lại `thietLapWebhook`.
+- **Bot im lặng**: chạy `xemTrangThaiWebhook` trong Apps Script. Nếu `url` trống thì dùng lại menu **3. Nối bot với Sheet**.
+- **Đổi token** (ví dụ lộ token, hoặc @BotFather → `/revoke`): menu **1. Cài đặt BOT_TOKEN** rồi **3. Nối bot với Sheet**. Cũng có thể sửa trực tiếp ở Apps Script → Cài đặt dự án → Thuộc tính tập lệnh (`BOT_TOKEN`, `PIN`).
 - **"Chat chưa đăng ký"**: `/dangky MẬT_KHẨU`.
 - **Không nhận báo cáo 20:30**: biểu tượng đồng hồ (Trigger) phải có `baoCaoTuDong`; nếu không thì chạy lại `setup`.
 - **`/doisoat` báo LỆCH**: xem danh sách dòng lỗi (sai dự án/danh mục/ví, thiếu ví, ngày hoặc số tiền dạng chữ, Loại viết sai) và sửa trong `SoCai`.
